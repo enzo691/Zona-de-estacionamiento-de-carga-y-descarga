@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        .custom-popup {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #333;
+            min-width: 200px;
+        }
+        .custom-popup h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            font-weight: 600;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .custom-popup h5 {
+            margin: 0 0 8px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .custom-popup ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        .custom-popup li {
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        .custom-popup li strong {
+            color: #2c3e50;
+        }
+        .custom-popup p {
+            margin: 8px 0;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        /* Override default leaflet popup styling for a cleaner look */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+        .leaflet-popup-content {
+            margin: 15px !important;
+        }
+
+        /* Dashboard / Legend Styles */
+        .info.legend {
+            background: white;
+            padding: 12px 16px;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            line-height: 24px;
+            min-width: 180px;
+        }
+        .info.legend h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 15px;
+            font-weight: 600;
+            border-bottom: 2px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            display: inline-block;
+            margin-right: 10px;
+            border-radius: 4px;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="data/CyD_Oficial_14x3_1.js"></script>
+        <script src="data/Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2.js"></script>
+        <script src="data/Zonasprohibidasbuffer_3.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[-31.58533423150627,-68.5407193874184],[-31.58201817909338,-68.53532067185566]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_OSMStandard_0');
+        map.getPane('pane_OSMStandard_0').style.zIndex = 400;
+        var layer_OSMStandard_0 = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            pane: 'pane_OSMStandard_0',
+            opacity: 1.0,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+        layer_OSMStandard_0;
+        map.addLayer(layer_OSMStandard_0);
+        function pop_CyD_Oficial_14x3_1(feature, layer) {
+            var largo = feature.properties['largo'] !== null ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            var ancho = feature.properties['ancho'] !== null ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            var popupContent = '<div class="custom-popup">\
+                    <h4>Zona de Carga y Descarga</h4>\
+                    <ul>\
+                        <li><strong>Largo:</strong> ' + largo + ' m</li>\
+                        <li><strong>Ancho:</strong> ' + ancho + ' m</li>\
+                    </ul>\
+                </div>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_CyD_Oficial_14x3_1_0() {
+            return {
+                pane: 'pane_CyD_Oficial_14x3_1',
+                opacity: 1,
+                color: '#e67e22',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.5,
+                fillColor: '#f39c12',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_CyD_Oficial_14x3_1');
+        map.getPane('pane_CyD_Oficial_14x3_1').style.zIndex = 401;
+        map.getPane('pane_CyD_Oficial_14x3_1').style['mix-blend-mode'] = 'normal';
+        var layer_CyD_Oficial_14x3_1 = new L.geoJson(json_CyD_Oficial_14x3_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_CyD_Oficial_14x3_1',
+            layerName: 'layer_CyD_Oficial_14x3_1',
+            pane: 'pane_CyD_Oficial_14x3_1',
+            onEachFeature: pop_CyD_Oficial_14x3_1,
+            style: style_CyD_Oficial_14x3_1_0,
+        });
+        bounds_group.addLayer(layer_CyD_Oficial_14x3_1);
+        map.addLayer(layer_CyD_Oficial_14x3_1);
+        function pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2(feature, layer) {
+            var nombre = feature.properties['Name'] ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento Oficial';
+            var capacidad = feature.properties['Capacidad moto'] !== null && feature.properties['Capacidad moto'] !== undefined ? autolinker.link(String(feature.properties['Capacidad moto']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            var largo = feature.properties['largo'] !== null && feature.properties['largo'] !== undefined ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            var ancho = feature.properties['ancho'] !== null && feature.properties['ancho'] !== undefined ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            var popupContent = '<div class="custom-popup">\
+                    <h4>Estacionamiento de Motos</h4>\
+                    <h5>' + nombre + '</h5>\
+                    <ul>\
+                        <li><strong>Capacidad:</strong> ' + capacidad + ' motos</li>\
+                        <li><strong>Dimensiones:</strong> ' + largo + 'm x ' + ancho + 'm</li>\
+                    </ul>\
+                </div>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2_0() {
+            return {
+                pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
+                opacity: 1,
+                color: '#2980b9',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.5,
+                fillColor: '#3498db',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2');
+        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2').style.zIndex = 402;
+        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2').style['mix-blend-mode'] = 'normal';
+        var layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2 = new L.geoJson(json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
+            layerName: 'layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
+            pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
+            onEachFeature: pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2,
+            style: style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2_0,
+        });
+        bounds_group.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2);
+        map.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2);
+        function pop_Zonasprohibidasbuffer_3(feature, layer) {
+            var ubicacion = feature.properties['name'] ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : 'Área designada';
+            var descripcion = feature.properties['description'] ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento prohibido en esta área.';
+            var popupContent = '<div class="custom-popup">\
+                    <h4>Zona Prohibida</h4>\
+                    <p><strong>Ubicación:</strong> ' + ubicacion + '</p>\
+                    <p>' + descripcion + '</p>\
+                </div>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Zonasprohibidasbuffer_3_0() {
+            return {
+                pane: 'pane_Zonasprohibidasbuffer_3',
+                opacity: 1,
+                color: '#c0392b',
+                dashArray: '4, 4',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.5,
+                fillColor: '#e74c3c',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Zonasprohibidasbuffer_3');
+        map.getPane('pane_Zonasprohibidasbuffer_3').style.zIndex = 403;
+        map.getPane('pane_Zonasprohibidasbuffer_3').style['mix-blend-mode'] = 'normal';
+        var layer_Zonasprohibidasbuffer_3 = new L.geoJson(json_Zonasprohibidasbuffer_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Zonasprohibidasbuffer_3',
+            layerName: 'layer_Zonasprohibidasbuffer_3',
+            pane: 'pane_Zonasprohibidasbuffer_3',
+            onEachFeature: pop_Zonasprohibidasbuffer_3,
+            style: style_Zonasprohibidasbuffer_3_0,
+        });
+        bounds_group.addLayer(layer_Zonasprohibidasbuffer_3);
+        map.addLayer(layer_Zonasprohibidasbuffer_3);
+
+        // Add Legend (Dashboard)
+        var legend = L.control({position: 'bottomright'});
+
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            div.innerHTML += '<h4>Referencias</h4>';
+            
+            // Carga y Descarga
+            div.innerHTML += '<div class="legend-item"><i class="legend-color" style="background: rgba(243, 156, 18, 0.5); border: 2px solid #e67e22;"></i> Zona Carga y Descarga</div>';
+            
+            // Motos
+            div.innerHTML += '<div class="legend-item"><i class="legend-color" style="background: rgba(52, 152, 219, 0.5); border: 2px solid #2980b9;"></i> Estacionamiento Motos</div>';
+            
+            // Zonas Prohibidas
+            div.innerHTML += '<div class="legend-item"><i class="legend-color" style="background: rgba(231, 76, 60, 0.5); border: 2px dashed #c0392b;"></i> Zona Prohibida</div>';
+
+            return div;
+        };
+
+        legend.addTo(map);
+
+        setBounds();
+        </script>        
+    </body>
+</html>
