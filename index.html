@@ -11,6 +11,17 @@
         <link rel="stylesheet" href="css/qgis2web.css">
         <link rel="stylesheet" href="css/fontawesome-all.min.css">
         <link rel="stylesheet" href="css/leaflet.photon.css">
+        <script>
+            // Script para eliminar Service Workers viejos que estén bloqueando la actualización
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                        console.log('Service Worker fantasma eliminado.');
+                    }
+                });
+            }
+        </script>
         <style>
         html, body, #map {
             width: 100%;
@@ -205,12 +216,17 @@
         function pop_CyD_Oficial_14x3_1(feature, layer) {
             var largo = feature.properties['largo'] !== null ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var ancho = feature.properties['ancho'] !== null ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            
+            var center = layer.getBounds().getCenter();
+            var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+
             var popupContent = '<div class="custom-popup">\
                     <h4>Zona de Carga y Descarga</h4>\
                     <ul>\
                         <li><strong>Largo:</strong> ' + largo + ' m</li>\
                         <li><strong>Ancho:</strong> ' + ancho + ' m</li>\
                     </ul>\
+                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#e67e22; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -253,6 +269,10 @@
             var capacidad = feature.properties['Capacidad moto'] !== null && feature.properties['Capacidad moto'] !== undefined ? autolinker.link(String(feature.properties['Capacidad moto']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var largo = feature.properties['largo'] !== null && feature.properties['largo'] !== undefined ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var ancho = feature.properties['ancho'] !== null && feature.properties['ancho'] !== undefined ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
+            
+            var center = layer.getBounds().getCenter();
+            var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+
             var popupContent = '<div class="custom-popup">\
                     <h4>Estacionamiento de Motos</h4>\
                     <h5>' + nombre + '</h5>\
@@ -260,6 +280,7 @@
                         <li><strong>Capacidad:</strong> ' + capacidad + ' motos</li>\
                         <li><strong>Dimensiones:</strong> ' + largo + 'm x ' + ancho + 'm</li>\
                     </ul>\
+                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#2980b9; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -300,10 +321,15 @@
         function pop_Zonasprohibidasbuffer_3(feature, layer) {
             var ubicacion = feature.properties['name'] ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : 'Área designada';
             var descripcion = feature.properties['description'] ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento prohibido en esta área.';
+            
+            var center = layer.getBounds().getCenter();
+            var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+
             var popupContent = '<div class="custom-popup">\
                     <h4>Zona Prohibida</h4>\
                     <p><strong>Ubicación:</strong> ' + ubicacion + '</p>\
                     <p>' + descripcion + '</p>\
+                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#c0392b; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -362,6 +388,46 @@
         };
 
         legend.addTo(map);
+
+        // Nuevas capas base (Satélite)
+        map.createPane('pane_GoogleSatellite_0');
+        map.getPane('pane_GoogleSatellite_0').style.zIndex = 398;
+        var layer_GoogleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleSatellite_0',
+            opacity: 1.0,
+            attribution: '&copy; <a href="https://www.google.com/intl/en_US/help/terms_maps.html">Google</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+
+        map.createPane('pane_EsriSatellite_0');
+        map.getPane('pane_EsriSatellite_0').style.zIndex = 399;
+        var layer_EsriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'pane_EsriSatellite_0',
+            opacity: 1.0,
+            attribution: 'Tiles &copy; Esri',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+
+        // Control de Capas
+        var baseMaps = {
+            "Mapa Claro (CARTO)": layer_OSMStandard_0,
+            "Google Satélite": layer_GoogleSatellite,
+            "Esri Satélite": layer_EsriSatellite
+        };
+
+        var overlayMaps = {
+            '<i class="fas fa-truck" style="color:#e67e22;"></i> Carga y Descarga': layer_CyD_Oficial_14x3_1,
+            '<i class="fas fa-motorcycle" style="color:#2980b9;"></i> Estacionamiento Motos': layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2,
+            '<i class="fas fa-ban" style="color:#c0392b;"></i> Zonas Prohibidas': layer_Zonasprohibidasbuffer_3
+        };
+
+        L.control.layers(baseMaps, overlayMaps, {position: 'topright', collapsed: false}).addTo(map);
 
         setBounds();
         </script>        
