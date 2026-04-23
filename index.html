@@ -11,14 +11,26 @@
         <link rel="stylesheet" href="css/qgis2web.css">
         <link rel="stylesheet" href="css/fontawesome-all.min.css">
         <link rel="stylesheet" href="css/leaflet.photon.css">
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+        <meta http-equiv="Pragma" content="no-cache">
+        <meta http-equiv="Expires" content="0">
         <script>
-            // Script para eliminar Service Workers viejos que estén bloqueando la actualización
+            // Script robusto para eliminar Service Workers viejos que estén bloqueando la actualización
+            // y asegurar que los usuarios siempre vean la versión más reciente sin tener que borrar caché.
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    let workersUnregistered = false;
                     for(let registration of registrations) {
                         registration.unregister();
-                        console.log('Service Worker fantasma eliminado.');
+                        workersUnregistered = true;
+                        console.log('Service Worker antiguo eliminado.');
                     }
+                    if (workersUnregistered) {
+                        console.log('Recargando la página para aplicar los cambios...');
+                        window.location.reload();
+                    }
+                }).catch(function(err) {
+                    console.log('Error al procesar Service Workers: ', err);
                 });
             }
         </script>
@@ -106,6 +118,30 @@
             margin-right: 10px;
             border-radius: 4px;
         }
+
+        /* Tooltip Numbers */
+        .leaflet-tooltip.number-tooltip {
+            background-color: #e67e22;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            border: 2px solid white;
+            border-radius: 12px;
+            padding: 4px 8px;
+            text-align: center;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            opacity: 1 !important;
+            white-space: nowrap;
+        }
+        .leaflet-tooltip.number-tooltip-motos {
+            background-color: #2980b9;
+        }
+        .leaflet-tooltip-left.number-tooltip::before,
+        .leaflet-tooltip-right.number-tooltip::before,
+        .leaflet-tooltip-top.number-tooltip::before,
+        .leaflet-tooltip-bottom.number-tooltip::before {
+            display: none;
+        }
         </style>
         <title></title>
     </head>
@@ -123,9 +159,9 @@
         <script src="js/labelgun.min.js"></script>
         <script src="js/labels.js"></script>
         <script src="js/leaflet.photon.js"></script>
-        <script src="data/CyD_Oficial_14x3_1.js"></script>
-        <script src="data/Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2.js"></script>
-        <script src="data/Zonasprohibidasbuffer_3.js"></script>
+        <script src="data/CyD_Oficial_18x5_1.js"></script>
+        <script src="data/Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3.js"></script>
+        <script src="data/Zonasprohibidas_2.js"></script>
         <script>
         var map = L.map('map', {
             zoomControl:false, maxZoom:28, minZoom:1
@@ -213,20 +249,48 @@
         });
         layer_OSMStandard_0;
         map.addLayer(layer_OSMStandard_0);
-        function pop_CyD_Oficial_14x3_1(feature, layer) {
+        function pop_CyD_Oficial_18x5_1(feature, layer) {
+            var nombreCompleto = feature.properties['Nombre'] ? String(feature.properties['Nombre']) : 'Zona de Carga y Descarga';
+            var numeroMatch = nombreCompleto.match(/\d+/);
+            var numero = numeroMatch ? numeroMatch[0] : '';
+            
+            if (numero) {
+                layer.bindTooltip('CyD ' + numero, {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'number-tooltip'
+                });
+            }
+
             var largo = feature.properties['largo'] !== null ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var ancho = feature.properties['ancho'] !== null ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             
             var center = layer.getBounds().getCenter();
             var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+            
+            var svPt = center;
+            var coords = layer.getLatLngs ? layer.getLatLngs() : null;
+            if (coords && coords.length > 0) {
+                var firstCoord = coords;
+                while (Array.isArray(firstCoord) && firstCoord.length > 0) {
+                    firstCoord = firstCoord[0];
+                }
+                if (firstCoord && firstCoord.lat !== undefined && firstCoord.lng !== undefined) {
+                    svPt = firstCoord;
+                }
+            }
+            var streetViewUrl = 'https://maps.google.com/maps?layer=c&cbll=' + svPt.lat + ',' + svPt.lng + '&cbp=11,0,0,0,0';
 
             var popupContent = '<div class="custom-popup">\
-                    <h4>Zona de Carga y Descarga</h4>\
+                    <h4>' + autolinker.link(nombreCompleto.replace(/'/g, '\'').toLocaleString()) + '</h4>\
                     <ul>\
                         <li><strong>Largo:</strong> ' + largo + ' m</li>\
                         <li><strong>Ancho:</strong> ' + ancho + ' m</li>\
                     </ul>\
-                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#e67e22; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">\
+                        <a href="' + svUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#e67e22; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Maps</a>\
+                        <a href="' + streetViewUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#34495e; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-street-view" style="margin-right:5px;"></i>Street View</a>\
+                    </div>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -235,9 +299,9 @@
 			layer.bindPopup(content, { maxHeight: 400 });
         }
 
-        function style_CyD_Oficial_14x3_1_0() {
+        function style_CyD_Oficial_18x5_1_0() {
             return {
-                pane: 'pane_CyD_Oficial_14x3_1',
+                pane: 'pane_CyD_Oficial_18x5_1',
                 opacity: 1,
                 color: '#e67e22',
                 dashArray: '',
@@ -250,28 +314,53 @@
                 interactive: true,
             }
         }
-        map.createPane('pane_CyD_Oficial_14x3_1');
-        map.getPane('pane_CyD_Oficial_14x3_1').style.zIndex = 401;
-        map.getPane('pane_CyD_Oficial_14x3_1').style['mix-blend-mode'] = 'normal';
-        var layer_CyD_Oficial_14x3_1 = new L.geoJson(json_CyD_Oficial_14x3_1, {
+        map.createPane('pane_CyD_Oficial_18x5_1');
+        map.getPane('pane_CyD_Oficial_18x5_1').style.zIndex = 401;
+        map.getPane('pane_CyD_Oficial_18x5_1').style['mix-blend-mode'] = 'normal';
+        var layer_CyD_Oficial_18x5_1 = new L.geoJson(json_CyD_Oficial_18x5_1, {
             attribution: '',
             interactive: true,
-            dataVar: 'json_CyD_Oficial_14x3_1',
-            layerName: 'layer_CyD_Oficial_14x3_1',
-            pane: 'pane_CyD_Oficial_14x3_1',
-            onEachFeature: pop_CyD_Oficial_14x3_1,
-            style: style_CyD_Oficial_14x3_1_0,
+            dataVar: 'json_CyD_Oficial_18x5_1',
+            layerName: 'layer_CyD_Oficial_18x5_1',
+            pane: 'pane_CyD_Oficial_18x5_1',
+            onEachFeature: pop_CyD_Oficial_18x5_1,
+            style: style_CyD_Oficial_18x5_1_0,
         });
-        bounds_group.addLayer(layer_CyD_Oficial_14x3_1);
-        map.addLayer(layer_CyD_Oficial_14x3_1);
-        function pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2(feature, layer) {
-            var nombre = feature.properties['Name'] ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento Oficial';
+        bounds_group.addLayer(layer_CyD_Oficial_18x5_1);
+        map.addLayer(layer_CyD_Oficial_18x5_1);
+        function pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3(feature, layer) {
+            var nombreCompleto = feature.properties['Nombre'] ? String(feature.properties['Nombre']) : (feature.properties['Name'] ? String(feature.properties['Name']) : 'Estacionamiento Oficial');
+            var numeroMatch = nombreCompleto.match(/\d+/);
+            var numero = numeroMatch ? numeroMatch[0] : '';
+            
+            if (numero) {
+                layer.bindTooltip('Moto ' + numero, {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'number-tooltip number-tooltip-motos'
+                });
+            }
+
+            var nombre = feature.properties['Nombre'] ? autolinker.link(String(feature.properties['Nombre']).replace(/'/g, '\'').toLocaleString()) : (feature.properties['Name'] ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento Oficial');
             var capacidad = feature.properties['Capacidad moto'] !== null && feature.properties['Capacidad moto'] !== undefined ? autolinker.link(String(feature.properties['Capacidad moto']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var largo = feature.properties['largo'] !== null && feature.properties['largo'] !== undefined ? autolinker.link(String(feature.properties['largo']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             var ancho = feature.properties['ancho'] !== null && feature.properties['ancho'] !== undefined ? autolinker.link(String(feature.properties['ancho']).replace(/'/g, '\'').toLocaleString()) : 'N/A';
             
             var center = layer.getBounds().getCenter();
             var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+            
+            var svPt = center;
+            var coords = layer.getLatLngs ? layer.getLatLngs() : null;
+            if (coords && coords.length > 0) {
+                var firstCoord = coords;
+                while (Array.isArray(firstCoord) && firstCoord.length > 0) {
+                    firstCoord = firstCoord[0];
+                }
+                if (firstCoord && firstCoord.lat !== undefined && firstCoord.lng !== undefined) {
+                    svPt = firstCoord;
+                }
+            }
+            var streetViewUrl = 'https://maps.google.com/maps?layer=c&cbll=' + svPt.lat + ',' + svPt.lng + '&cbp=11,0,0,0,0';
 
             var popupContent = '<div class="custom-popup">\
                     <h4>Estacionamiento de Motos</h4>\
@@ -280,7 +369,10 @@
                         <li><strong>Capacidad:</strong> ' + capacidad + ' motos</li>\
                         <li><strong>Dimensiones:</strong> ' + largo + 'm x ' + ancho + 'm</li>\
                     </ul>\
-                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#2980b9; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">\
+                        <a href="' + svUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#2980b9; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Maps</a>\
+                        <a href="' + streetViewUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#34495e; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-street-view" style="margin-right:5px;"></i>Street View</a>\
+                    </div>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -289,9 +381,9 @@
 			layer.bindPopup(content, { maxHeight: 400 });
         }
 
-        function style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2_0() {
+        function style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3_0() {
             return {
-                pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
+                pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3',
                 opacity: 1,
                 color: '#2980b9',
                 dashArray: '',
@@ -304,32 +396,48 @@
                 interactive: true,
             }
         }
-        map.createPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2');
-        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2').style.zIndex = 402;
-        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2').style['mix-blend-mode'] = 'normal';
-        var layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2 = new L.geoJson(json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2, {
+        map.createPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3');
+        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3').style.zIndex = 402;
+        map.getPane('pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3').style['mix-blend-mode'] = 'normal';
+        var layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3 = new L.geoJson(json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3, {
             attribution: '',
             interactive: true,
-            dataVar: 'json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
-            layerName: 'layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
-            pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2',
-            onEachFeature: pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2,
-            style: style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2_0,
+            dataVar: 'json_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3',
+            layerName: 'layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3',
+            pane: 'pane_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3',
+            onEachFeature: pop_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3,
+            style: style_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3_0,
         });
-        bounds_group.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2);
-        map.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2);
-        function pop_Zonasprohibidasbuffer_3(feature, layer) {
+        bounds_group.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3);
+        map.addLayer(layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3);
+        function pop_Zonasprohibidas_2(feature, layer) {
             var ubicacion = feature.properties['name'] ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : 'Área designada';
             var descripcion = feature.properties['description'] ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : 'Estacionamiento prohibido en esta área.';
             
             var center = layer.getBounds().getCenter();
             var svUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat + ',' + center.lng;
+            
+            var svPt = center;
+            var coords = layer.getLatLngs ? layer.getLatLngs() : null;
+            if (coords && coords.length > 0) {
+                var firstCoord = coords;
+                while (Array.isArray(firstCoord) && firstCoord.length > 0) {
+                    firstCoord = firstCoord[0];
+                }
+                if (firstCoord && firstCoord.lat !== undefined && firstCoord.lng !== undefined) {
+                    svPt = firstCoord;
+                }
+            }
+            var streetViewUrl = 'https://maps.google.com/maps?layer=c&cbll=' + svPt.lat + ',' + svPt.lng + '&cbp=11,0,0,0,0';
 
             var popupContent = '<div class="custom-popup">\
                     <h4>Zona Prohibida</h4>\
                     <p><strong>Ubicación:</strong> ' + ubicacion + '</p>\
                     <p>' + descripcion + '</p>\
-                    <a href="' + svUrl + '" target="_blank" style="display:block; margin-top:12px; padding:8px 0; background-color:#c0392b; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center; width:100%;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Ver en Google Maps</a>\
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">\
+                        <a href="' + svUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#c0392b; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>Maps</a>\
+                        <a href="' + streetViewUrl + '" target="_blank" style="flex: 1; padding:8px 0; background-color:#34495e; color:white; text-decoration:none; border-radius:6px; font-weight:600; font-size:13px; text-align:center;"><i class="fas fa-street-view" style="margin-right:5px;"></i>Street View</a>\
+                    </div>\
                 </div>';
             var content = removeEmptyRowsFromPopupContent(popupContent, feature);
 			layer.on('popupopen', function(e) {
@@ -338,9 +446,9 @@
 			layer.bindPopup(content, { maxHeight: 400 });
         }
 
-        function style_Zonasprohibidasbuffer_3_0() {
+        function style_Zonasprohibidas_2_0() {
             return {
-                pane: 'pane_Zonasprohibidasbuffer_3',
+                pane: 'pane_Zonasprohibidas_2',
                 opacity: 1,
                 color: '#c0392b',
                 dashArray: '4, 4',
@@ -353,20 +461,20 @@
                 interactive: true,
             }
         }
-        map.createPane('pane_Zonasprohibidasbuffer_3');
-        map.getPane('pane_Zonasprohibidasbuffer_3').style.zIndex = 403;
-        map.getPane('pane_Zonasprohibidasbuffer_3').style['mix-blend-mode'] = 'normal';
-        var layer_Zonasprohibidasbuffer_3 = new L.geoJson(json_Zonasprohibidasbuffer_3, {
+        map.createPane('pane_Zonasprohibidas_2');
+        map.getPane('pane_Zonasprohibidas_2').style.zIndex = 403;
+        map.getPane('pane_Zonasprohibidas_2').style['mix-blend-mode'] = 'normal';
+        var layer_Zonasprohibidas_2 = new L.geoJson(json_Zonasprohibidas_2, {
             attribution: '',
             interactive: true,
-            dataVar: 'json_Zonasprohibidasbuffer_3',
-            layerName: 'layer_Zonasprohibidasbuffer_3',
-            pane: 'pane_Zonasprohibidasbuffer_3',
-            onEachFeature: pop_Zonasprohibidasbuffer_3,
-            style: style_Zonasprohibidasbuffer_3_0,
+            dataVar: 'json_Zonasprohibidas_2',
+            layerName: 'layer_Zonasprohibidas_2',
+            pane: 'pane_Zonasprohibidas_2',
+            onEachFeature: pop_Zonasprohibidas_2,
+            style: style_Zonasprohibidas_2_0,
         });
-        bounds_group.addLayer(layer_Zonasprohibidasbuffer_3);
-        map.addLayer(layer_Zonasprohibidasbuffer_3);
+        bounds_group.addLayer(layer_Zonasprohibidas_2);
+        map.addLayer(layer_Zonasprohibidas_2);
 
         // Add Legend (Dashboard)
         var legend = L.control({position: 'bottomright'});
@@ -422,9 +530,9 @@
         };
 
         var overlayMaps = {
-            '<i class="fas fa-truck" style="color:#e67e22;"></i> Carga y Descarga': layer_CyD_Oficial_14x3_1,
-            '<i class="fas fa-motorcycle" style="color:#2980b9;"></i> Estacionamiento Motos': layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_2,
-            '<i class="fas fa-ban" style="color:#c0392b;"></i> Zonas Prohibidas': layer_Zonasprohibidasbuffer_3
+            '<i class="fas fa-truck" style="color:#e67e22;"></i> Carga y Descarga': layer_CyD_Oficial_18x5_1,
+            '<i class="fas fa-motorcycle" style="color:#2980b9;"></i> Estacionamiento Motos': layer_Estacionamientodemotoshechoboxesmotos_oficiales_poligonos_3,
+            '<i class="fas fa-ban" style="color:#c0392b;"></i> Zonas Prohibidas': layer_Zonasprohibidas_2
         };
 
         L.control.layers(baseMaps, overlayMaps, {position: 'topright', collapsed: false}).addTo(map);
